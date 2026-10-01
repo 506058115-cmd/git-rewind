@@ -13,6 +13,13 @@ FIELD_SEPARATOR = "\x1f"
 COMMIT_LIMIT = 5000  # ponytail: scans the latest 5,000 commits; make depth configurable if large-history users need it
 
 
+def terminal_safe(value):
+    return "".join(
+        char if char.isprintable() else char.encode("unicode_escape").decode("ascii")
+        for char in value
+    )
+
+
 def read_commits(repository):
     try:
         result = subprocess.run(
@@ -32,6 +39,8 @@ def read_commits(repository):
         )
     except FileNotFoundError as error:
         raise RuntimeError("Git was not found. Install Git and try again.") from error
+    except OSError as error:
+        raise RuntimeError(f"Could not run Git: {error}") from error
 
     if result.returncode:
         detail = result.stderr.strip() or "Could not read Git history."
@@ -68,7 +77,7 @@ def main(argv=None):
     try:
         commits = read_commits(args.repository)
     except RuntimeError as error:
-        print(f"git-rewind: {error}", file=sys.stderr)
+        print(f"git-rewind: {terminal_safe(str(error))}", file=sys.stderr)
         return 2
 
     if not commits:
@@ -93,7 +102,10 @@ def main(argv=None):
         sha, authored_date, subject = random.choice(earlier_commits)
         print("No anniversary found; here's a random earlier commit:")
 
-    print(f"{authored_date.isoformat()}  {sha}  {subject or '(no commit message)'}")
+    print(
+        f"{authored_date.isoformat()}  {sha}  "
+        f"{terminal_safe(subject or '(no commit message)')}"
+    )
     return 0
 
 
